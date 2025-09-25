@@ -69,43 +69,52 @@ export default function MapClusterHeat({
 }: MapClusterHeatProps) {
     const [mode, setMode] = useState<MapMode>(defaultMode);
 
-    useEffect(() => {
-        fixLeafletIcon();
-    }, []);
+    useEffect(() => { fixLeafletIcon(); }, []);
 
     return (
         <div className={className} style={{ width: '100%' }}>
-            {/* Toggle */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <button
-                    onClick={() => setMode('cluster')}
+            <div style={{ position: 'relative', width: '100%', height }}>
+                {/* ⭐ ปุ่มลอย ไม่ดัน layout */}
+                <div
                     style={{
-                        padding: '6px 12px',
-                        borderRadius: 8,
-                        border: '1px solid #d1d5db',
-                        background: mode === 'cluster' ? '#003398' : '#fff',
-                        color: mode === 'cluster' ? '#fff' : '#111827',
-                        cursor: 'pointer'
+                        position: 'absolute',
+                        zIndex: 1000,
+                        top: 12,
+                        left: 50,
+                        display: 'flex',
+                        gap: 8,
                     }}
                 >
-                    Cluster Map
-                </button>
-                <button
-                    onClick={() => setMode('heat')}
-                    style={{
-                        padding: '6px 12px',
-                        borderRadius: 8,
-                        border: '1px solid #d1d5db',
-                        background: mode === 'heat' ? '#003398' : '#fff',
-                        color: mode === 'heat' ? '#fff' : '#111827',
-                        cursor: 'pointer'
-                    }}
-                >
-                    Heatmap
-                </button>
-            </div>
+                    <button
+                        onClick={() => setMode('cluster')}
+                        style={{
+                            padding: '6px 12px',
+                            borderRadius: 8,
+                            border: '1px solid #d1d5db',
+                            background: mode === 'cluster' ? '#003398' : '#fff',
+                            color: mode === 'cluster' ? '#fff' : '#111827',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        Cluster Map
+                    </button>
+                    <button
+                        onClick={() => setMode('heat')}
+                        style={{
+                            padding: '6px 12px',
+                            borderRadius: 8,
+                            border: '1px solid #d1d5db',
+                            background: mode === 'heat' ? '#003398' : '#fff',
+                            color: mode === 'heat' ? '#fff' : '#111827',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        Heatmap
+                    </button>
+                </div>
 
-            <div style={{ width: '100%', height }}>
+
+                {/* แผนที่สูงเต็ม container */}
                 <MapContainer
                     center={initialCenter}
                     zoom={initialZoom}
@@ -117,16 +126,15 @@ export default function MapClusterHeat({
                         maxZoom={maxZoom}
                     />
 
-                    {mode === 'cluster' ? (
-                        <ClusterLayer points={points} />
-                    ) : (
-                        <HeatLayer points={points} radius={heatRadius} blur={heatBlur} />
-                    )}
+                    {mode === 'cluster'
+                        ? <ClusterLayer points={points} />
+                        : <HeatLayer points={points} radius={heatRadius} blur={heatBlur} />}
                 </MapContainer>
             </div>
         </div>
     );
 }
+
 
 /* ------------ Cluster Layer (imperative via useMap) ------------ */
 function ClusterLayer({ points }: { points: PointFeature[] }) {
