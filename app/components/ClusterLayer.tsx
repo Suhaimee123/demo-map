@@ -2,9 +2,10 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Marker, Tooltip, CircleMarker, useMapEvents } from 'react-leaflet';
+import { Marker, Popup, useMapEvents } from 'react-leaflet';
 import type * as LNS from 'leaflet';
 import Supercluster from 'supercluster';
+
 
 let L: typeof LNS | null = null;
 if (typeof window !== 'undefined') { L = require('leaflet'); }
@@ -79,15 +80,16 @@ export default function ClusterLayer({ points, radius = 60, maxZoom = 18 }: {
                     return <Marker key={`c-${id}`} position={[lat, lng]} icon={icon(count)} eventHandlers={{ click: () => onClusterClick(lat, lng, id) }} />;
                 }
                 return (
-                    <CircleMarker key={`p-${f.properties.id || i}`} center={[lat, lng]} radius={4} pathOptions={{ weight: 1 }}>
-                        <Tooltip>
-                            <div style={{ fontSize: 12 }}>
+                    <Marker key={`p-${f.properties.id || i}`} position={[lat, lng]}>
+                        <Popup>
+                            <div style={{ fontSize: 12, lineHeight: 1.4 }}>
                                 <b>{f.properties.nameTH || f.properties.nameEN}</b><br />
-                                <small>{f.properties.addressTH || ''}</small>
+                                <small>{f.properties.addressTH || f.properties.addressEN || ''}</small>
                             </div>
-                        </Tooltip>
-                    </CircleMarker>
+                        </Popup>
+                    </Marker>
                 );
+
             })}
         </>
     );

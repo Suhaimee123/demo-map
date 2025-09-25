@@ -9,6 +9,10 @@ import type * as LeafletNS from 'leaflet';
 import HeatLayer from './components/HeatLayer';
 import ClusterLayer from './components/ClusterLayer';
 
+import 'leaflet-defaulticon-compatibility';
+import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
+
+
 type StopRow = {
     id: string;
     nameTH: string;
