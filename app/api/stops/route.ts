@@ -12,47 +12,77 @@ type StopRow = {
     icon?: string;
 };
 
+// ===== in-memory cache =====
+let _cache: { mtimeMs: number; rows: StopRow[] } | null = null;
+
+async function loadStopsOnce(): Promise<StopRow[]> {
+    const filePath = path.join(process.cwd(), 'public', 'data', 'namtang-stop.txt');
+    const stat = await fs.stat(filePath);
+    if (_cache && _cache.mtimeMs === stat.mtimeMs) return _cache.rows;
+    const text = await fs.readFile(filePath, 'utf8');
+    const rows = parseNamtangFile(text);
+    _cache = { mtimeMs: stat.mtimeMs, rows };
+    return rows;
+}
+
+function inferType(iconRaw: string): 'bus' | 'bts' | 'boat' | 'brt' | 'unknown' {
+    const s = (iconRaw || '').toLowerCase();
+    if (s.includes('bts')) return 'bts';
+    if (s.includes('brt')) return 'brt';
+    if (s.includes('boat') || s.includes('pier') || s.includes('ferry')) return 'boat';
+    if (s.includes('bus')) return 'bus';
+    return 'unknown';
+}
+
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const q = (searchParams.get('q') || '').trim().toLowerCase();
-        const typesParam = (searchParams.get('types') || '').trim(); // "bus,bts,boat,brt"
-        const bboxParam = (searchParams.get('bbox') || '').trim(); // "west,south,east,north"
 
-        const types = typesParam ? typesParam.split(',').map(s => s.trim()) : ['bus', 'bts', 'boat', 'brt'];
+        const typesRaw = searchParams.get('types');
+        let types: string[];
+        if (typesRaw === null) {
+            types = ['bus', 'bts', 'boat', 'brt'];     // ไม่ส่งมาเลย → ดีฟอลต์ทั้งหมด
+        } else if (typesRaw.trim() === '') {
+            types = [];                                 // ส่งมาเป็นค่าว่าง → ไม่เอาสักประเภท
+        } else {
+            types = typesRaw.split(',').map(s => s.trim().toLowerCase());
+        }
+
+        const bboxParam = (searchParams.get('bbox') || '').trim();
         const bbox = (() => {
             if (!bboxParam) return null;
             const p = bboxParam.split(',').map(Number);
             if (p.length === 4 && p.every(Number.isFinite)) {
-                const [west, south, east, north] = p; return { west, south, east, north };
+                const [west, south, east, north] = p;
+                const pad = 1e-6;
+                return { west: west - pad, south: south - pad, east: east + pad, north: north + pad };
             }
             return null;
         })();
 
-        const filePath = path.join(process.cwd(), 'public', 'data', 'namtang-stop.txt');
-        const text = await fs.readFile(filePath, 'utf8');
-        const all = parseNamtangFile(text);
+        const all = await loadStopsOnce();
 
         const filtered = all.filter(r => {
-            const icon = (r.icon || '').toLowerCase();
-            const typeMatch =
-                (types.includes('bus') && /bus/.test(icon)) ||
-                (types.includes('bts') && /bts/.test(icon)) ||
-                (types.includes('boat') && /boat/.test(icon)) ||
-                (types.includes('brt') && /brt/.test(icon));
-            if (!typeMatch) return false;
+            if (types.length === 0) return false;
+            const t = inferType(r.icon || '');
+            if (!types.includes(t)) return false;
 
             if (q) {
                 const hay = `${r.nameTH} ${r.nameEN} ${r.addressTH || ''} ${r.addressEN || ''}`.toLowerCase();
                 if (!hay.includes(q)) return false;
             }
+
             if (bbox) {
                 if (r.lng < bbox.west || r.lng > bbox.east || r.lat < bbox.south || r.lat > bbox.north) return false;
             }
             return true;
         });
 
-        return Response.json({ ok: true, count: filtered.length, data: filtered }, { headers: { 'Cache-Control': 'no-store' } });
+        return Response.json(
+            { ok: true, count: filtered.length, data: filtered },
+            { headers: { 'Cache-Control': 'no-store' } }
+        );
     } catch (e: any) {
         return Response.json({ ok: false, error: e?.message || 'unknown error' }, { status: 500 });
     }
@@ -67,8 +97,13 @@ function parseNamtangFile(text: string): StopRow[] {
         const lat = Number(cols[3]); const lng = Number(cols[4]);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
         rows.push({
-            id: cols[0], nameTH: cols[1], nameEN: cols[2],
-            lat, lng, addressTH: cols[6] || '', addressEN: cols[7] || '', icon: cols[13] || '',
+            id: cols[0],
+            nameTH: cols[1],
+            nameEN: cols[2],
+            lat, lng,
+            addressTH: cols[6] || '',
+            addressEN: cols[7] || '',
+            icon: cols[13] || '',
         });
     }
     return rows;
