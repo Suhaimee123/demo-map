@@ -1,4 +1,3 @@
-// app/components/ClusterLayer.tsx
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -6,13 +5,13 @@ import { Marker, Popup, useMapEvents } from 'react-leaflet';
 import type * as LNS from 'leaflet';
 import Supercluster from 'supercluster';
 
-
 let L: typeof LNS | null = null;
 if (typeof window !== 'undefined') { L = require('leaflet'); }
 
 export type ClusterPoint = {
     id: string; lat: number; lng: number;
     nameTH?: string; nameEN?: string; addressTH?: string; addressEN?: string;
+    iconType?: string; // 'bus' | 'bts' | 'boat' | 'brt' | 'unknown'
 };
 
 type GeoJSONPoint = GeoJSON.Feature<GeoJSON.Point, any>;
@@ -20,19 +19,29 @@ type ClusterFeature = GeoJSONPoint & {
     properties: {
         cluster?: boolean; cluster_id?: number; point_count?: number; point_count_abbreviated?: number;
         id?: string; nameTH?: string; nameEN?: string; addressTH?: string; addressEN?: string;
+        iconType?: string;
     }
 };
 
-export default function ClusterLayer({ points, radius = 60, maxZoom = 18 }: {
+export default function ClusterLayer({
+    points, radius = 60, maxZoom = 18,
+    getPointIcon, getPointFallbackIcon,
+}: {
     points: ClusterPoint[]; radius?: number; maxZoom?: number;
+    getPointIcon?: (iconType?: string) => LNS.Icon | LNS.DivIcon | undefined;
+    getPointFallbackIcon?: (iconType?: string) => LNS.DivIcon | undefined;
 }) {
     const [clusters, setClusters] = useState<ClusterFeature[]>([]);
     const indexRef = useRef<Supercluster | null>(null);
     const mapRef = useRef<LNS.Map | null>(null);
 
     const features: GeoJSONPoint[] = useMemo(() => points.map(p => ({
-        type: 'Feature', geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-        properties: { id: p.id, nameTH: p.nameTH, nameEN: p.nameEN, addressTH: p.addressTH, addressEN: p.addressEN }
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+        properties: {
+            id: p.id, nameTH: p.nameTH, nameEN: p.nameEN, addressTH: p.addressTH, addressEN: p.addressEN,
+            iconType: p.iconType,
+        }
     })), [points]);
 
     useEffect(() => {
@@ -60,7 +69,7 @@ export default function ClusterLayer({ points, radius = 60, maxZoom = 18 }: {
         map.setView([lat, lng], nextZoom, { animate: true });
     }
 
-    function icon(count: number) {
+    function clusterIcon(count: number) {
         if (!L) return undefined;
         const size = count < 10 ? 34 : count < 100 ? 40 : 48;
         const bg = count < 10 ? '#4ade80' : count < 100 ? '#60a5fa' : '#fb923c';
@@ -77,10 +86,19 @@ export default function ClusterLayer({ points, radius = 60, maxZoom = 18 }: {
                 const [lng, lat] = f.geometry.coordinates as [number, number];
                 if (f.properties.cluster) {
                     const id = f.properties.cluster_id!, count = f.properties.point_count || 0;
-                    return <Marker key={`c-${id}`} position={[lat, lng]} icon={icon(count)} eventHandlers={{ click: () => onClusterClick(lat, lng, id) }} />;
+                    return <Marker key={`c-${id}`} position={[lat, lng]} icon={clusterIcon(count)} eventHandlers={{ click: () => onClusterClick(lat, lng, id) }} />;
                 }
+
+                // ---- icon + fallback ----
+                const typeKey = (f.properties.iconType || 'unknown').toLowerCase();
+                let icon = getPointIcon?.(typeKey);
+                // ถ้า icon ไฟล์หาย/ไม่ขึ้น ให้ใช้ fallback DivIcon
+                if (!icon && getPointFallbackIcon) {
+                    icon = getPointFallbackIcon(typeKey);
+                }
+
                 return (
-                    <Marker key={`p-${f.properties.id || i}`} position={[lat, lng]}>
+                    <Marker key={`p-${f.properties.id || i}`} position={[lat, lng]} icon={icon}>
                         <Popup>
                             <div style={{ fontSize: 12, lineHeight: 1.4 }}>
                                 <b>{f.properties.nameTH || f.properties.nameEN}</b><br />
@@ -89,7 +107,6 @@ export default function ClusterLayer({ points, radius = 60, maxZoom = 18 }: {
                         </Popup>
                     </Marker>
                 );
-
             })}
         </>
     );
